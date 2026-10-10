@@ -209,7 +209,9 @@ fn generated_rust_routes_match_the_public_manifest() {
     // right now, so a client can run background memory work at no charge.
     // 263 -> 266: `POST /memory/v1/erasures`, `GET /memory/v1/erasures/{id}`
     // and the hosted-memory wipe `DELETE /memory`.
-    assert_eq!(manifest["source"]["operationCount"], 266);
+    // 266 -> 267: `GET /openai/v1/threads/{threadId}/usage`, a conversation's
+    // billed spend reconstructed from the money records.
+    assert_eq!(manifest["source"]["operationCount"], 267);
     // 14 -> 13: `GET /orchestration/v1/steering` left with that family.
     assert_eq!(manifest["source"]["supplementalOperationCount"], 13);
     // 37 -> 39: the two service-token operations on
