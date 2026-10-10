@@ -67,7 +67,11 @@ fn every_admin_and_webhook_route_is_rejected_by_the_raw_transport_gate() {
     // `top-tenants`, `tenants/{userId}` and the new `model-usage`). The first
     // four were already on backend `main` but never synced here; admin-only,
     // so blocked at the raw transport and given no typed method.
-    assert_eq!(UNEXPOSED_ROUTES.len(), 64);
+    // 64 -> 65: `POST /webhooks/elevenlabs`, the ElevenLabs post-call webhook
+    // receiver. The two Twilio webhook receivers stay listed: they are retained
+    // in sync-openapi.mjs so the raw transport keeps refusing them against any
+    // backend still serving them.
+    assert_eq!(UNEXPOSED_ROUTES.len(), 65);
     for (method, template) in UNEXPOSED_ROUTES {
         let concrete_path = template
             .split('/')
