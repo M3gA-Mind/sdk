@@ -1,6 +1,6 @@
 use serde_json::json;
 use tinyhumans_sdk::TinyHumansClient;
-use wiremock::matchers::{body_json, method, path, query_param};
+use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn ok(data: serde_json::Value) -> ResponseTemplate {

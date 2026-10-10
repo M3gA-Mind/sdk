@@ -211,7 +211,11 @@ fn generated_rust_routes_match_the_public_manifest() {
     // and the hosted-memory wipe `DELETE /memory`.
     // 266 -> 267: `GET /openai/v1/threads/{threadId}/usage`, a conversation's
     // billed spend reconstructed from the money records.
-    assert_eq!(manifest["source"]["operationCount"], 267);
+    // 267 -> 256: Twilio, Apify and the Recall.ai meeting-bot stack were removed
+    // from the backend: the three Apify run routes, `POST
+    // /agent-integrations/twilio/call`, the five `/agent-integrations/recall-calendar/*`
+    // routes, and `POST /mascots/join-meeting` + `GET /mascots/meetings`.
+    assert_eq!(manifest["source"]["operationCount"], 256);
     // 14 -> 13: `GET /orchestration/v1/steering` left with that family.
     assert_eq!(manifest["source"]["supplementalOperationCount"], 13);
     // 37 -> 39: the two service-token operations on
@@ -252,7 +256,9 @@ fn generated_rust_routes_match_the_public_manifest() {
     // admin service token's memory aggregates. Four were already on backend
     // `main` but never synced; none is public.
     assert_eq!(manifest["source"]["excludedAdminOperationCount"], 52);
-    assert_eq!(manifest["source"]["excludedWebhookOperationCount"], 12);
+    // 12 -> 13: `POST /webhooks/elevenlabs`, the ElevenLabs post-call webhook
+    // receiver (provider-signed, so excluded like every other receiver).
+    assert_eq!(manifest["source"]["excludedWebhookOperationCount"], 13);
     // 206 -> 208: the two new public opencompany routes above
     // (`GET /opencompany/companies` and `POST /opencompany/instances/{slug}/update`).
     // 208 -> 211: the three Gemini routes.
@@ -271,7 +277,9 @@ fn generated_rust_routes_match_the_public_manifest() {
     // 262 -> 263: `GET /memory/free-period` — see `operationCount` above.
     // 263 -> 266: the erasure routes and `DELETE /memory` — see `operationCount` above.
     // 266 -> 267: the thread usage read — see `operationCount` above.
-    assert_eq!(rust_routes.len(), 267);
+    // 267 -> 256: the Twilio, Apify and meeting-bot routes left with those
+    // integrations — see `operationCount` above.
+    assert_eq!(rust_routes.len(), 256);
     assert_eq!(rust_routes, manifest_routes);
     assert!(rust_routes
         .iter()
