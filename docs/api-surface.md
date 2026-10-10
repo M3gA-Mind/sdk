@@ -31,7 +31,7 @@ namespace.
 | `health` | `/` | none | `check()` liveness |
 | `auth` | `/auth` | bearer | email login, OAuth, `me()`, integration tokens |
 | `inference` | `/openai` | bearer | `GET /v1/models`, chat completions, responses, transcription |
-| `agentIntegrations` | `/agent-integrations` | bearer | Composio, Parallel, media generation, maps, Twilio, crypto, OpenRouter |
+| `agentIntegrations` | `/agent-integrations` | bearer | Composio, Parallel, media generation, maps, Tenor, crypto, OpenRouter |
 | `apiKeys` | `/api-keys` | bearer | create, list, and revoke user API keys |
 | `budgets` | `/budgets` | bearer | team budgets and seat allocations |
 | `openCompany` | `/opencompany` | bearer | company instances, lifecycle, and custom domains |
@@ -39,7 +39,7 @@ namespace.
 | `feedback` | `/feedback` | bearer | create, ingest, list, detail, vote, and comments |
 | `teams` | `/teams` | bearer | personal-team detail, usage, and billing; membership/invite routes are retired (`410`) |
 | `channels` | `/channels` | bearer | messages, reactions, typing, threads |
-| `mascots` | `/mascots` | mixed | catalog, render streams, meetings, Rive assets |
+| `mascots` | `/mascots` | mixed | catalog, manifests, demo page, Rive assets |
 | `memory` | `/memory` | bearer | write experiences, recall, answer, events, facts/beliefs/understanding, derivation status, blobs, forget, scopes (billed per call), free period (whether memory is free right now) |
 | `announcements` | `/announcements` | bearer | latest active announcement |
 | `coupons` | `/coupons` | bearer | redemption and coupon history |
