@@ -270,7 +270,8 @@ fn generated_rust_routes_match_the_public_manifest() {
     // 257 -> 262: the five Sarvam routes — see `operationCount` above.
     // 262 -> 263: `GET /memory/free-period` — see `operationCount` above.
     // 263 -> 266: the erasure routes and `DELETE /memory` — see `operationCount` above.
-    assert_eq!(rust_routes.len(), 266);
+    // 266 -> 267: the thread usage read — see `operationCount` above.
+    assert_eq!(rust_routes.len(), 267);
     assert_eq!(rust_routes, manifest_routes);
     assert!(rust_routes
         .iter()
