@@ -163,4 +163,3 @@ pub struct CreateTeamInviteRequest {
 pub struct EmailInviteRequest {
     pub email: String,
 }
-
