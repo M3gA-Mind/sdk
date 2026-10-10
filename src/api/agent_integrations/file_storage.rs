@@ -75,6 +75,7 @@ pub struct UpdateFileVisibilityRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateFileLinkRequest {
+    /// Link lifetime; the backend caps it at 900 seconds.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub expires_in_seconds: Option<u32>,
 }

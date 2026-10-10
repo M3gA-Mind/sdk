@@ -9,10 +9,9 @@ pub struct TwilioCallRequest {
     pub to: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
+    /// Inline TwiML. `<Dial>`, `<Conference>`, `<Enqueue>` and `<Redirect>` are rejected.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub twiml: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]

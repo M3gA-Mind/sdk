@@ -41,13 +41,11 @@ fn the_pre_split_types_path_still_resolves() {
             to: "+15550100".into(),
             message: None,
             twiml: None,
-            url: None,
         },
         &split::twilio::TwilioCallRequest {
             to: "+15550100".into(),
             message: None,
             twiml: None,
-            url: None,
         },
     );
     // The module-root glob re-export, which is what `AgentIntegrationsApi`
