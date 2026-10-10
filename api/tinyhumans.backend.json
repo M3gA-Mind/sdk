@@ -8,9 +8,9 @@
     "url": "https://api.tinyhumans.ai/swagger.json",
     "title": "TinyHumans API",
     "version": "1.0.0",
-    "pathCount": 294,
-    "totalOperationCount": 326,
-    "operationCount": 266,
+    "pathCount": 295,
+    "totalOperationCount": 327,
+    "operationCount": 267,
     "supplementalOperationCount": 13,
     "excludedAdminOperationCount": 52,
     "excludedWebhookOperationCount": 12,
@@ -288,12 +288,13 @@
       "name": "inference",
       "basePath": "/openai",
       "auth": "bearer",
-      "operationCount": 6,
+      "operationCount": 7,
       "tags": [
         "Inference"
       ],
       "routes": [
         "GET /openai/v1/models",
+        "GET /openai/v1/threads/{threadId}/usage",
         "POST /openai/v1/audio/speech",
         "POST /openai/v1/audio/transcriptions",
         "POST /openai/v1/chat/completions",

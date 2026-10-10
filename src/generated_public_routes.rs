@@ -188,6 +188,7 @@ pub const PUBLIC_ROUTES: &[(&str, &str)] = &[
     ("POST", "/openai/v1/completions"),
     ("POST", "/openai/v1/embeddings"),
     ("GET", "/openai/v1/models"),
+    ("GET", "/openai/v1/threads/{threadId}/usage"),
     ("GET", "/opencompany/companies"),
     ("GET", "/opencompany/instances"),
     ("POST", "/opencompany/instances"),
