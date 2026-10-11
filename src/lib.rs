@@ -51,6 +51,9 @@ pub enum Error {
     Header(#[from] reqwest::header::InvalidHeaderValue),
     #[error("response decoding failed: {0}")]
     Decode(#[from] serde_json::Error),
+    /// A bounded request received more response bytes than its budget.
+    #[error("response exceeds {max_bytes} bytes")]
+    ResponseTooLarge { max_bytes: usize },
     #[cfg(feature = "socket")]
     #[error("socket.io transport failed: {0}")]
     Socket(Box<rust_socketio::Error>),
@@ -319,6 +322,34 @@ impl HttpClient {
         path: &str,
         form: reqwest::multipart::Form,
     ) -> Result<Value, Error> {
+        self.post_multipart_inner(path, form, None).await
+    }
+
+    /// POST multipart data with a hard response byte budget.
+    ///
+    /// The limit applies to success and error bodies while they are streamed,
+    /// before JSON decoding. Credential echoes in rejected response bodies are
+    /// redacted without changing the successful response or envelope semantics.
+    ///
+    /// # Errors
+    /// Returns [`Error::ResponseTooLarge`] if the response exceeds the budget,
+    /// or the normal route, transport, status and envelope errors.
+    pub async fn post_multipart_with_response_limit(
+        &self,
+        path: &str,
+        form: reqwest::multipart::Form,
+        max_response_bytes: usize,
+    ) -> Result<Value, Error> {
+        self.post_multipart_inner(path, form, Some(max_response_bytes))
+            .await
+    }
+
+    async fn post_multipart_inner(
+        &self,
+        path: &str,
+        form: reqwest::multipart::Form,
+        max_response_bytes: Option<usize>,
+    ) -> Result<Value, Error> {
         reject_unexposed_route(&Method::POST, path)?;
         let url = self.url(path, &[])?;
         // A multipart request's `Content-Type` (`multipart/form-data; boundary=…`)
@@ -330,7 +361,7 @@ impl HttpClient {
         // unchanged) so `.multipart()` can set the correct one.
         let mut headers = self.headers()?;
         headers.remove(CONTENT_TYPE);
-        let response = self
+        let mut response = self
             .client
             .post(url)
             .headers(headers)
@@ -338,19 +369,52 @@ impl HttpClient {
             .send()
             .await?;
         let status = response.status();
-        let text = response.text().await?;
-        let value = if text.is_empty() {
+        let text = if let Some(max_bytes) = max_response_bytes {
+            let mut bytes = Vec::new();
+            while let Some(chunk) = response.chunk().await? {
+                if bytes.len().saturating_add(chunk.len()) > max_bytes {
+                    return Err(Error::ResponseTooLarge { max_bytes });
+                }
+                bytes.extend_from_slice(&chunk);
+            }
+            String::from_utf8_lossy(&bytes).into_owned()
+        } else {
+            response.text().await?
+        };
+        let mut value = if text.is_empty() {
             Value::Null
         } else {
             serde_json::from_str(&text).unwrap_or(Value::String(text))
         };
+        if max_response_bytes.is_some() && !status.is_success() {
+            redact_credential_echoes(
+                &mut value,
+                &[self.token.as_deref(), self.api_key.as_deref()],
+            );
+        }
         if !status.is_success() {
             return Err(Error::Status {
                 status: status.as_u16(),
                 body: value,
             });
         }
-        unwrap_envelope(value)
+        let mut result = unwrap_envelope(value);
+        if max_response_bytes.is_some() {
+            if let Err(Error::Envelope {
+                error,
+                error_code,
+                details,
+            }) = &mut result
+            {
+                let secrets = normalized_secrets(&[self.token.as_deref(), self.api_key.as_deref()]);
+                redact_text(error, &secrets);
+                if let Some(code) = error_code {
+                    redact_text(code, &secrets);
+                }
+                redact_value(details, &secrets);
+            }
+        }
+        result
     }
 
     /// Send `body` as-is under `content_type` (a file upload that is not
@@ -573,3 +637,59 @@ fn is_structurally_unexposed(method: &Method, path: &str) -> bool {
 #[cfg(test)]
 #[path = "lib_exclusion_tests.rs"]
 mod exclusion_tests;
+
+fn normalized_secrets<'a>(secrets: &[Option<&'a str>]) -> Vec<&'a str> {
+    let mut secrets: Vec<_> = secrets
+        .iter()
+        .flatten()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+        .collect();
+    secrets.sort_by_key(|secret| std::cmp::Reverse(secret.len()));
+    secrets.dedup();
+    secrets
+}
+
+fn redact_credential_echoes(value: &mut Value, secrets: &[Option<&str>]) {
+    redact_value(value, &normalized_secrets(secrets));
+}
+
+fn redact_text(text: &mut String, secrets: &[&str]) {
+    let marker = "[REDACTED]";
+    let replacement = if secrets.iter().any(|secret| marker.contains(secret)) {
+        ""
+    } else {
+        marker
+    };
+    for secret in secrets {
+        *text = text.replace(secret, replacement);
+    }
+    // Replacement can join surrounding text into a previously removed secret.
+    if secrets.iter().any(|secret| text.contains(secret)) {
+        text.clear();
+    }
+}
+
+fn redact_value(value: &mut Value, secrets: &[&str]) {
+    match value {
+        Value::String(text) => redact_text(text, secrets),
+        Value::Array(values) => {
+            for value in values {
+                redact_value(value, secrets);
+            }
+        }
+        Value::Object(values) => {
+            let original = std::mem::take(values);
+            for (mut key, mut value) in original {
+                redact_text(&mut key, secrets);
+                redact_value(&mut value, secrets);
+                values.insert(key, value);
+            }
+        }
+        _ => {}
+    }
+}
+
+#[cfg(test)]
+#[path = "lib_multipart_tests.rs"]
+mod multipart_tests;

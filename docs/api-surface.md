@@ -69,6 +69,13 @@ Most JSON responses use the hosted-backend envelope:
 SDK request helpers unwrap this envelope by default. The raw helper can return the
 full response body when callers need status metadata or non-standard payloads.
 
+Multipart callers can use `post_multipart_with_response_limit(path, form, max_bytes)`
+to bound the response body while it is read. Responses exceeding the budget return
+`Error::ResponseTooLarge` before JSON parsing. Failed responses redact echoes of
+the client's configured bearer token and API key, including nested values and
+object keys; successful payloads remain unchanged. The existing `post_multipart`
+helper retains its previous behavior.
+
 ## Gemini
 
 `agent_integrations::gemini` covers the Gemini API, billed at Google's paid-tier
