@@ -642,10 +642,20 @@ fn redact_credential_echoes(value: &mut Value, secrets: &[Option<&str>]) {
             }
         }
         Value::Object(values) => {
-            for value in values.values_mut() {
-                redact_credential_echoes(value, secrets);
+            let original = std::mem::take(values);
+            for (key, mut value) in original {
+                let mut key = Value::String(key);
+                redact_credential_echoes(&mut key, secrets);
+                redact_credential_echoes(&mut value, secrets);
+                if let Value::String(key) = key {
+                    values.insert(key, value);
+                }
             }
         }
         _ => {}
     }
 }
+
+#[cfg(test)]
+#[path = "lib_multipart_tests.rs"]
+mod multipart_tests;
