@@ -33,3 +33,24 @@ fn overlapping_credentials_are_redacted_without_exposing_a_suffix() {
         serde_json::json!({"[REDACTED]": ["[REDACTED]", "[REDACTED]"]})
     );
 }
+
+#[test]
+fn redaction_markers_cannot_echo_configured_credentials() {
+    for secret in ["REDACTED", "[REDACTED]", "["] {
+        let mut value = serde_json::json!({secret: [secret, "ordinary diagnostic"]});
+        redact_credential_echoes(&mut value, &[Some(secret)]);
+        let object = value.as_object().unwrap();
+        assert!(object.keys().all(|key| !key.contains(secret)));
+        let values = object.values().next().unwrap().as_array().unwrap();
+        assert!(!values[0].as_str().unwrap().contains(secret));
+        assert_eq!(values[1], "ordinary diagnostic");
+    }
+}
+
+#[test]
+fn removing_a_marker_colliding_credential_cannot_join_another_credential() {
+    let mut value = serde_json::json!("aREDACTEDbc");
+    redact_credential_echoes(&mut value, &[Some("REDACTED"), Some("abc")]);
+    assert!(!value.as_str().unwrap().contains("REDACTED"));
+    assert!(!value.as_str().unwrap().contains("abc"));
+}

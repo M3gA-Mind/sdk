@@ -135,3 +135,33 @@ async fn a_credential_matching_a_protocol_key_keeps_the_failure_classification()
     let error = result.unwrap_err().to_string();
     assert!(!error.contains("success"));
 }
+
+#[tokio::test]
+async fn marker_colliding_credentials_are_removed_from_status_and_envelope_errors() {
+    let server = MockServer::start().await;
+    for status in [401, 200] {
+        server.reset().await;
+        Mock::given(method("POST"))
+            .and(path("/openai/v1/audio/transcriptions"))
+            .respond_with(ResponseTemplate::new(status).set_body_json(
+                serde_json::json!({"success": false, "error": "REDACTED", "details": {"[REDACTED]": "REDACTED"}}),
+            ))
+            .mount(&server)
+            .await;
+        let client = TinyHumansClient::new(server.uri())
+            .with_token(Some("REDACTED".into()))
+            .with_api_key(Some("[REDACTED]".into()));
+        let error = client.raw().post_multipart_with_response_limit(
+            "/openai/v1/audio/transcriptions",
+            reqwest::multipart::Form::new(),
+            LIMIT,
+        ).await.unwrap_err();
+        if status == 401 {
+            assert!(matches!(&error, tinyhumans_sdk::Error::Status { .. }));
+        } else {
+            assert!(matches!(&error, tinyhumans_sdk::Error::Envelope { .. }));
+        }
+        assert!(!error.to_string().contains("REDACTED"));
+        assert!(!format!("{error:?}").contains("REDACTED"));
+    }
+}
