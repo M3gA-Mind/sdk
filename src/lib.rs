@@ -386,9 +386,7 @@ impl HttpClient {
         } else {
             serde_json::from_str(&text).unwrap_or(Value::String(text))
         };
-        if max_response_bytes.is_some()
-            && (!status.is_success() || value.get("success") == Some(&Value::Bool(false)))
-        {
+        if max_response_bytes.is_some() && !status.is_success() {
             redact_credential_echoes(
                 &mut value,
                 &[self.token.as_deref(), self.api_key.as_deref()],
@@ -400,7 +398,23 @@ impl HttpClient {
                 body: value,
             });
         }
-        unwrap_envelope(value)
+        let mut result = unwrap_envelope(value);
+        if max_response_bytes.is_some() {
+            if let Err(Error::Envelope {
+                error,
+                error_code,
+                details,
+            }) = &mut result
+            {
+                let secrets = normalized_secrets(&[self.token.as_deref(), self.api_key.as_deref()]);
+                redact_text(error, &secrets);
+                if let Some(code) = error_code {
+                    redact_text(code, &secrets);
+                }
+                redact_value(details, &secrets);
+            }
+        }
+        result
     }
 
     /// Send `body` as-is under `content_type` (a file upload that is not
@@ -624,32 +638,42 @@ fn is_structurally_unexposed(method: &Method, path: &str) -> bool {
 #[path = "lib_exclusion_tests.rs"]
 mod exclusion_tests;
 
+fn normalized_secrets<'a>(secrets: &[Option<&'a str>]) -> Vec<&'a str> {
+    let mut secrets: Vec<_> = secrets
+        .iter()
+        .flatten()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+        .collect();
+    secrets.sort_by_key(|secret| std::cmp::Reverse(secret.len()));
+    secrets.dedup();
+    secrets
+}
+
 fn redact_credential_echoes(value: &mut Value, secrets: &[Option<&str>]) {
+    redact_value(value, &normalized_secrets(secrets));
+}
+
+fn redact_text(text: &mut String, secrets: &[&str]) {
+    for secret in secrets {
+        *text = text.replace(secret, "[REDACTED]");
+    }
+}
+
+fn redact_value(value: &mut Value, secrets: &[&str]) {
     match value {
-        Value::String(text) => {
-            for secret in secrets
-                .iter()
-                .flatten()
-                .map(|value| value.trim())
-                .filter(|value| !value.is_empty())
-            {
-                *text = text.replace(secret, "[REDACTED]");
-            }
-        }
+        Value::String(text) => redact_text(text, secrets),
         Value::Array(values) => {
             for value in values {
-                redact_credential_echoes(value, secrets);
+                redact_value(value, secrets);
             }
         }
         Value::Object(values) => {
             let original = std::mem::take(values);
-            for (key, mut value) in original {
-                let mut key = Value::String(key);
-                redact_credential_echoes(&mut key, secrets);
-                redact_credential_echoes(&mut value, secrets);
-                if let Value::String(key) = key {
-                    values.insert(key, value);
-                }
+            for (mut key, mut value) in original {
+                redact_text(&mut key, secrets);
+                redact_value(&mut value, secrets);
+                values.insert(key, value);
             }
         }
         _ => {}

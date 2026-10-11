@@ -27,7 +27,7 @@ async fn oversized_multipart_response_is_rejected() {
         )
         .await;
     assert!(
-        result.is_err(),
+        matches!(result, Err(tinyhumans_sdk::Error::ResponseTooLarge { max_bytes }) if max_bytes == LIMIT),
         "response exceeded the transcription byte budget"
     );
 }
