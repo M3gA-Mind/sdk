@@ -108,3 +108,30 @@ async fn unsuccessful_envelope_redacts_api_key_echoes_on_success_status() {
     assert!(!result.to_string().contains(secret));
     assert!(result.to_string().contains("[REDACTED]"));
 }
+
+#[tokio::test]
+async fn a_credential_matching_a_protocol_key_keeps_the_failure_classification() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/openai/v1/audio/transcriptions"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(
+            serde_json::json!({"success": false, "error": "success", "details": {"success": "success"}}),
+        ))
+        .mount(&server)
+        .await;
+    let client = TinyHumansClient::new(server.uri()).with_token(Some("success".into()));
+    let result = client
+        .raw()
+        .post_multipart_with_response_limit(
+            "/openai/v1/audio/transcriptions",
+            reqwest::multipart::Form::new(),
+            LIMIT,
+        )
+        .await;
+    assert!(
+        matches!(&result, Err(tinyhumans_sdk::Error::Envelope { .. })),
+        "{result:?}"
+    );
+    let error = result.unwrap_err().to_string();
+    assert!(!error.contains("success"));
+}

@@ -23,3 +23,13 @@ fn absent_or_blank_credentials_leave_diagnostics_unchanged() {
     redact_credential_echoes(&mut value, &[None, Some("  ")]);
     assert_eq!(value, original);
 }
+
+#[test]
+fn overlapping_credentials_are_redacted_without_exposing_a_suffix() {
+    let mut value = serde_json::json!({"abc": ["abcdef-secret", "abc"]});
+    redact_credential_echoes(&mut value, &[Some("abc"), Some("abcdef-secret")]);
+    assert_eq!(
+        value,
+        serde_json::json!({"[REDACTED]": ["[REDACTED]", "[REDACTED]"]})
+    );
+}
