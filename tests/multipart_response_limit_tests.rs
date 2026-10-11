@@ -151,11 +151,15 @@ async fn marker_colliding_credentials_are_removed_from_status_and_envelope_error
         let client = TinyHumansClient::new(server.uri())
             .with_token(Some("REDACTED".into()))
             .with_api_key(Some("[REDACTED]".into()));
-        let error = client.raw().post_multipart_with_response_limit(
-            "/openai/v1/audio/transcriptions",
-            reqwest::multipart::Form::new(),
-            LIMIT,
-        ).await.unwrap_err();
+        let error = client
+            .raw()
+            .post_multipart_with_response_limit(
+                "/openai/v1/audio/transcriptions",
+                reqwest::multipart::Form::new(),
+                LIMIT,
+            )
+            .await
+            .unwrap_err();
         if status == 401 {
             assert!(matches!(&error, tinyhumans_sdk::Error::Status { .. }));
         } else {

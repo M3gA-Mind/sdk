@@ -655,8 +655,18 @@ fn redact_credential_echoes(value: &mut Value, secrets: &[Option<&str>]) {
 }
 
 fn redact_text(text: &mut String, secrets: &[&str]) {
+    let marker = "[REDACTED]";
+    let replacement = if secrets.iter().any(|secret| marker.contains(secret)) {
+        ""
+    } else {
+        marker
+    };
     for secret in secrets {
-        *text = text.replace(secret, "[REDACTED]");
+        *text = text.replace(secret, replacement);
+    }
+    // Replacement can join surrounding text into a previously removed secret.
+    if secrets.iter().any(|secret| text.contains(secret)) {
+        text.clear();
     }
 }
 
