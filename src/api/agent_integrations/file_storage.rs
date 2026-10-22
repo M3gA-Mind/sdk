@@ -105,13 +105,10 @@ impl AgentIntegrationsApi<'_> {
     }
     pub async fn download_file(&self, file_id: &str) -> Result<Vec<u8>, Error> {
         self.http
-            .send_bytes(
-                Method::GET,
-                &format!(
-                    "/agent-integrations/file-storage/files/{}/download",
-                    enc(file_id)
-                ),
-            )
+            .send_bytes_following_presigned(&format!(
+                "/agent-integrations/file-storage/files/{}/download",
+                enc(file_id)
+            ))
             .await
     }
     pub async fn public_file(&self, file_id: &str) -> Result<Vec<u8>, Error> {

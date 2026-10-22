@@ -128,8 +128,10 @@ impl TinyHumansClient {
 
     /// Use a caller-supplied [`reqwest::Client`] instead of the crate default.
     ///
-    /// The default client is `reqwest::Client::new()`: bundled rustls roots, no
-    /// timeout, no proxy configuration. That is a reasonable default for a
+    /// The default client is reqwest's default with bundled rustls roots, no
+    /// timeout, no proxy configuration, following redirects only within the
+    /// original origin. A supplied client must not follow cross-origin
+    /// redirects either: the SDK sends the API key as `x-api-key`. That is a reasonable default for a
     /// standalone script but wrong for an embedded host, which needs the SDK's
     /// requests to share its own transport policy — TLS backend, timeouts,
     /// proxy, redirect policy, connection pool.
@@ -249,7 +251,10 @@ impl HttpClient {
             base_url: base_url.into().trim_end_matches('/').to_owned(),
             token: None,
             api_key: None,
-            client: ReqwestClient::new(),
+            client: ReqwestClient::builder()
+                .redirect(same_origin_redirects())
+                .build()
+                .expect("default reqwest client builds"),
             default_headers: HeaderMap::new(),
         }
     }
@@ -490,6 +495,37 @@ impl HttpClient {
             .headers(self.headers()?)
             .send()
             .await?;
+        Self::read_bytes(response).await
+    }
+
+    /// GET a download route whose answer is a redirect to presigned storage on
+    /// another origin, and follow that one hop without the SDK's credentials.
+    pub(crate) async fn send_bytes_following_presigned(
+        &self,
+        path: &str,
+    ) -> Result<Vec<u8>, Error> {
+        reject_unexposed_route(&Method::GET, path)?;
+        let url = self.url(path, &[])?;
+        let response = self
+            .client
+            .get(url.clone())
+            .headers(self.headers()?)
+            .send()
+            .await?;
+        let location = response
+            .headers()
+            .get(reqwest::header::LOCATION)
+            .and_then(|value| value.to_str().ok())
+            .filter(|_| response.status().is_redirection())
+            .and_then(|location| url.join(location).ok());
+        let response = match location {
+            Some(location) => self.client.get(location).send().await?,
+            None => response,
+        };
+        Ok(Self::read_bytes(response).await?.0)
+    }
+
+    async fn read_bytes(response: reqwest::Response) -> Result<(Vec<u8>, Option<String>), Error> {
         let status = response.status();
         let content_type = response
             .headers()
@@ -583,6 +619,21 @@ fn unwrap_envelope(body: Value) -> Result<Value, Error> {
         }),
         None => Ok(Value::Object(map)),
     }
+}
+
+/// Follow a redirect only within the origin of the original request: the SDK
+/// sends `x-api-key`, a custom header reqwest does not strip across origins.
+fn same_origin_redirects() -> reqwest::redirect::Policy {
+    reqwest::redirect::Policy::custom(|attempt| {
+        let first = &attempt.previous()[0];
+        if attempt.previous().len() > 10 {
+            attempt.error("too many redirects")
+        } else if attempt.url().origin() == first.origin() {
+            attempt.follow()
+        } else {
+            attempt.stop()
+        }
+    })
 }
 
 /// `Url::parse` resolves `.`/`..` segments (also percent-encoded, also split

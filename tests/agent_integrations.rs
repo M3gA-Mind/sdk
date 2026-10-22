@@ -1367,3 +1367,39 @@ async fn sarvam_voice_agent_session_is_typed() {
     let session = api.sarvam_live_session("s3").await.unwrap();
     assert_eq!(session.usage_totals.agent_seconds, 42.5);
 }
+
+// `download_file` answers with a redirect to presigned storage on another
+// origin. The SDK follows that one hop without its own credentials.
+#[tokio::test]
+async fn file_download_follows_presigned_redirect_without_credentials() {
+    let storage = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/bucket/file_1"))
+        .respond_with(ResponseTemplate::new(200).set_body_bytes([7_u8, 8]))
+        .mount(&storage)
+        .await;
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path(
+            "/agent-integrations/file-storage/files/file_1/download",
+        ))
+        .respond_with(ResponseTemplate::new(302).insert_header(
+            "Location",
+            format!("{}/bucket/file_1?sig=abc", storage.uri()).as_str(),
+        ))
+        .mount(&server)
+        .await;
+
+    let bytes = TinyHumansClient::new(server.uri())
+        .with_api_key(Some("k".into()))
+        .with_token(Some("t".into()))
+        .agent_integrations()
+        .download_file("file_1")
+        .await
+        .unwrap();
+    assert_eq!(bytes, vec![7, 8]);
+    for request in storage.received_requests().await.unwrap() {
+        assert!(request.headers.get("x-api-key").is_none());
+        assert!(request.headers.get("authorization").is_none());
+    }
+}
