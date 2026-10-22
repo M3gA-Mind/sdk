@@ -5,7 +5,7 @@
 //! escape hatch for routes not yet surfaced as typed methods.
 
 use generated_public_routes::{PUBLIC_ROUTES, UNEXPOSED_ROUTES};
-use percent_encoding::{utf8_percent_encode, AsciiSet, NON_ALPHANUMERIC};
+use percent_encoding::{percent_decode_str, utf8_percent_encode, AsciiSet, NON_ALPHANUMERIC};
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, AUTHORIZATION, CONTENT_TYPE};
 use reqwest::{Client as ReqwestClient, Method};
 use serde_json::Value;
@@ -585,9 +585,23 @@ fn unwrap_envelope(body: Value) -> Result<Value, Error> {
     }
 }
 
+/// `Url::parse` resolves `.`/`..` segments (also percent-encoded, also split
+/// by `\` or tab/newline) so they would re-target the request.
+fn has_dot_segment(path: &str) -> bool {
+    let path = path.split(['?', '#']).next().unwrap_or_default();
+    path.contains(['\t', '\n', '\r'])
+        || path.split(['/', '\\']).any(|segment| {
+            matches!(
+                &*percent_decode_str(segment).decode_utf8_lossy(),
+                "." | ".."
+            )
+        })
+}
+
 fn reject_unexposed_route(method: &Method, path: &str) -> Result<(), Error> {
-    let blocked =
-        route_matches(UNEXPOSED_ROUTES, method, path) || is_structurally_unexposed(method, path);
+    let blocked = route_matches(UNEXPOSED_ROUTES, method, path)
+        || is_structurally_unexposed(method, path)
+        || has_dot_segment(path);
     if blocked {
         Err(Error::RouteNotExposed(
             method.as_str().to_owned(),
