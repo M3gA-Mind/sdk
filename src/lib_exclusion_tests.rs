@@ -244,3 +244,10 @@ fn a_suffix_separator_or_case_variant_does_not_unblock_a_route() {
         );
     }
 }
+
+#[test]
+fn an_escaped_slash_stays_inside_its_segment() {
+    // `wh%2F1` is one tunnel id; decoding must not split it into two segments
+    // and push a public route out of its template.
+    assert!(reject_unexposed_route(&Method::DELETE, "/webhooks/core/wh%2F1").is_ok());
+}

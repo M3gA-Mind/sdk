@@ -667,10 +667,12 @@ fn reject_unexposed_route(method: &Method, path: &str) -> Result<(), Error> {
 }
 
 /// The path the server will route, parsed the way [`HttpClient::url`] parses
-/// it (a `?`/`#` suffix is dropped and `\` reads as `/`), percent-decoded once
-/// and lower-cased. Gating the raw string instead lets `/internal?x`,
-/// `\internal`, `/%69nternal` or `/Internal` slip past. `None` (refuse) when
-/// the path does not parse or decodes to invalid UTF-8.
+/// it (a `?`/`#` suffix is dropped and `\` reads as `/`), with each segment
+/// percent-decoded once and lower-cased. Gating the raw string instead lets
+/// `/internal?x`, `\internal`, `/%69nternal` or `/Internal` slip past. An
+/// escaped `/` stays inside its segment, as routing keeps it (`wh%2F1` is one
+/// id). `None` (refuse) when the path does not parse or a segment decodes to
+/// invalid UTF-8.
 fn parsed_path(path: &str) -> Option<String> {
     let normalized = if path.starts_with('/') {
         path.to_owned()
@@ -678,8 +680,14 @@ fn parsed_path(path: &str) -> Option<String> {
         format!("/{path}")
     };
     let url = Url::parse(&format!("http://gate.invalid{normalized}")).ok()?;
-    let decoded = percent_decode_str(url.path()).decode_utf8().ok()?;
-    Some(decoded.to_ascii_lowercase())
+    url.path()
+        .split('/')
+        .map(|segment| {
+            let decoded = percent_decode_str(segment).decode_utf8().ok()?;
+            Some(decoded.replace('/', "%2f").to_ascii_lowercase())
+        })
+        .collect::<Option<Vec<_>>>()
+        .map(|segments| segments.join("/"))
 }
 
 fn route_matches(routes: &[(&str, &str)], method: &Method, path: &str) -> bool {
@@ -702,14 +710,22 @@ fn route_matches(routes: &[(&str, &str)], method: &Method, path: &str) -> bool {
 
 fn is_structurally_unexposed(method: &Method, path: &str) -> bool {
     let segments = path.trim_matches('/').split('/').collect::<Vec<_>>();
-    if segments.contains(&"admin") {
+    // For the deny names only, also split at an escaped `/` (kept as `%2f` by
+    // `parsed_path`): a proxy that decodes `%2F` routes `/a%2fadmin%2Fx` as
+    // `/a/admin/x`.
+    let pieces = segments
+        .iter()
+        .flat_map(|segment| segment.split("%2f"))
+        .filter(|piece| !piece.is_empty())
+        .collect::<Vec<_>>();
+    if pieces.contains(&"admin") {
         return true;
     }
 
     // Service-to-service routes live under `/internal` and are deliberately
     // absent from the published spec, so they cannot be listed by name here.
     // No SDK user holds the credentials they take; block the whole prefix.
-    if segments.first() == Some(&"internal") {
+    if pieces.first() == Some(&"internal") {
         return true;
     }
 
