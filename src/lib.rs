@@ -667,8 +667,10 @@ fn reject_unexposed_route(method: &Method, path: &str) -> Result<(), Error> {
 }
 
 /// The path the server will route, parsed the way [`HttpClient::url`] parses
-/// it: a `?`/`#` suffix is dropped and `\` reads as `/`. Gating the raw string
-/// instead lets `/internal?x`, `\internal` or `/Internal` slip past.
+/// it (a `?`/`#` suffix is dropped and `\` reads as `/`), percent-decoded once
+/// and lower-cased. Gating the raw string instead lets `/internal?x`,
+/// `\internal`, `/%69nternal` or `/Internal` slip past. `None` (refuse) when
+/// the path does not parse or decodes to invalid UTF-8.
 fn parsed_path(path: &str) -> Option<String> {
     let normalized = if path.starts_with('/') {
         path.to_owned()
@@ -676,7 +678,8 @@ fn parsed_path(path: &str) -> Option<String> {
         format!("/{path}")
     };
     let url = Url::parse(&format!("http://gate.invalid{normalized}")).ok()?;
-    Some(url.path().to_ascii_lowercase())
+    let decoded = percent_decode_str(url.path()).decode_utf8().ok()?;
+    Some(decoded.to_ascii_lowercase())
 }
 
 fn route_matches(routes: &[(&str, &str)], method: &Method, path: &str) -> bool {
